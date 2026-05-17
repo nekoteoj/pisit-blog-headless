@@ -123,7 +123,7 @@ coverImage: ./cover.png
 
 ---
 
-## 📋 Consuming the API
+## 📋 API Documentation
 
 The generator produces static JSON files that act as your "API".
 
@@ -147,7 +147,33 @@ Contains the full rendered HTML and metadata. Returns a `PostContent` object.
 | `htmlContent`| `string` | The rendered HTML content of the post. |
 | `toc` | `TableOfContentsItem[]` | Structured list of headings for navigation. |
 
-### 3. Data Schema Definitions
+### 3. Tag Index
+**Path:** `/tags/{tag}.json`
+Returns an array of `PostMetadata` objects that are associated with the specified tag.
+
+| Path | Description |
+| :--- | :--- |
+| `GET /tags/tech.json` | Returns all posts tagged with "tech", sorted by date descending. |
+
+### 4. Search Index
+**Path:** `/search-index.json`
+A compact array of objects intended for client-side fuzzy search.
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `title` | `string` | Post title. |
+| `slug` | `string` | Post slug. |
+| `summary` | `string` | Post summary. |
+| `date` | `string` | ISO 8601 formatted date. |
+
+### 5. SEO Artifacts
+
+- **Sitemap:** `/sitemap.xml` - Standard XML sitemap containing all published posts.
+- **RSS Feed:** `/rss.xml` - RSS 2.0 feed containing the 20 most recent posts.
+
+---
+
+## 📋 Data Schema Definitions
 
 #### `PostMetadata`
 Used in paginated lists, tag indexes, and individual post objects.
@@ -170,10 +196,6 @@ Used to build client-side navigation or sidebars.
 | `level` | `int` | Heading level (e.g., 1 for `<h1>`, 2 for `<h2>`). |
 | `title` | `string` | The text content of the heading. |
 | `id` | `string` | The HTML ID assigned to the heading (e.g., `hello-world`). |
-
-### 4. Search Index
-**Path:** `/search-index.json`
-A compact array of objects `{ title, slug, summary, date }` intended for client-side fuzzy search.
 
 ---
 
