@@ -25,22 +25,10 @@ public class ContentProcessor
             .Build();
     }
 
-    public PostContent ProcessPost(string markdownContent, Func<string, string>? imageRewriter = null)
+    public async Task<PostContent?> ProcessPostAsync(string markdownContent, Func<string, Task<string>>? imageRewriter = null)
     {
         var document = Markdown.Parse(markdownContent, _pipeline);
         
-        // Rewrite image paths if rewriter is provided
-        if (imageRewriter != null)
-        {
-            foreach (var link in document.Descendants<Markdig.Syntax.Inlines.LinkInline>())
-            {
-                if (link.IsImage && link.Url != null && !link.Url.StartsWith("http"))
-                {
-                    link.Url = imageRewriter(link.Url);
-                }
-            }
-        }
-
         // Extract Frontmatter
         var yamlBlock = document.Descendants<YamlFrontMatterBlock>().FirstOrDefault();
         if (yamlBlock == null)
@@ -58,6 +46,20 @@ public class ContentProcessor
         if (string.IsNullOrWhiteSpace(metadata.Title)) throw new InvalidOperationException("Metadata 'title' is required.");
         if (string.IsNullOrWhiteSpace(metadata.Slug)) throw new InvalidOperationException("Metadata 'slug' is required.");
         if (metadata.Date == default) throw new InvalidOperationException("Metadata 'date' is required.");
+
+        if (metadata.Draft) return null;
+
+        // Rewrite image paths if rewriter is provided
+        if (imageRewriter != null)
+        {
+            foreach (var link in document.Descendants<Markdig.Syntax.Inlines.LinkInline>())
+            {
+                if (link.IsImage && link.Url != null && !link.Url.StartsWith("http"))
+                {
+                    link.Url = await imageRewriter(link.Url);
+                }
+            }
+        }
 
         // Convert to HTML
         using var writer = new StringWriter();

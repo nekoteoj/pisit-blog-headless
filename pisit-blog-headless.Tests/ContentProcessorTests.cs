@@ -7,7 +7,7 @@ namespace PisitBlog.Tests;
 public class ContentProcessorTests
 {
     [Fact]
-    public void ProcessPost_ValidMarkdown_ReturnsPostContent()
+    public async Task ProcessPostAsync_ValidMarkdown_ReturnsPostContent()
     {
         // Arrange
         var processor = new ContentProcessor();
@@ -28,9 +28,10 @@ coverImage: ./cover.webp
 This is the article content.";
 
         // Act
-        var result = processor.ProcessPost(markdown);
+        var result = await processor.ProcessPostAsync(markdown);
 
         // Assert
+        Assert.NotNull(result);
         Assert.Equal("Hello World", result.Metadata.Title);
         Assert.Equal("hello-world", result.Metadata.Slug);
         Assert.Equal(DateTimeOffset.Parse("2026-05-16"), result.Metadata.Date);
@@ -42,7 +43,7 @@ This is the article content.";
     }
 
     [Fact]
-    public void ProcessPost_WithImageRewriter_RewritesImagePaths()
+    public async Task ProcessPostAsync_WithImageRewriter_RewritesImagePaths()
     {
         // Arrange
         var processor = new ContentProcessor();
@@ -54,14 +55,35 @@ date: 2026-05-16
 ![Test Image](./cover.png)";
 
         // Act
-        var result = processor.ProcessPost(markdown, url => "/assets/hashed-image.webp");
+        var result = await processor.ProcessPostAsync(markdown, url => Task.FromResult("/assets/hashed-image.webp"));
 
         // Assert
+        Assert.NotNull(result);
         Assert.Contains("<img src=\"/assets/hashed-image.webp\" alt=\"Test Image\" />", result.HtmlContent);
     }
 
     [Fact]
-    public void ProcessPost_MissingSlug_ThrowsException()
+    public async Task ProcessPostAsync_DraftIsTrue_ReturnsNull()
+    {
+        // Arrange
+        var processor = new ContentProcessor();
+        var markdown = @"---
+title: Draft Post
+slug: draft-post
+date: 2026-05-16
+draft: true
+---
+This is draft content.";
+
+        // Act
+        var result = await processor.ProcessPostAsync(markdown);
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task ProcessPostAsync_MissingSlug_ThrowsException()
     {
         var processor = new ContentProcessor();
         var markdown = @"---
@@ -69,11 +91,11 @@ title: Title
 date: 2026-05-16
 ---
 Content";
-        Assert.Throws<InvalidOperationException>(() => processor.ProcessPost(markdown));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => processor.ProcessPostAsync(markdown));
     }
 
     [Fact]
-    public void ProcessPost_MissingDate_ThrowsException()
+    public async Task ProcessPostAsync_MissingDate_ThrowsException()
     {
         var processor = new ContentProcessor();
         var markdown = @"---
@@ -81,19 +103,19 @@ title: Title
 slug: slug
 ---
 Content";
-        Assert.Throws<InvalidOperationException>(() => processor.ProcessPost(markdown));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => processor.ProcessPostAsync(markdown));
     }
 
     [Fact]
-    public void ProcessPost_MissingYaml_ThrowsException()
+    public async Task ProcessPostAsync_MissingYaml_ThrowsException()
     {
         var processor = new ContentProcessor();
         var markdown = "# No YAML here";
-        Assert.Throws<InvalidOperationException>(() => processor.ProcessPost(markdown));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => processor.ProcessPostAsync(markdown));
     }
 
     [Fact]
-    public void ProcessPost_ExtractsTocWithCorrectIds()
+    public async Task ProcessPostAsync_ExtractsTocWithCorrectIds()
     {
         // Arrange
         var processor = new ContentProcessor();
@@ -106,9 +128,10 @@ date: 2026-05-16
 ## Heading 2";
 
         // Act
-        var result = processor.ProcessPost(markdown);
+        var result = await processor.ProcessPostAsync(markdown);
 
         // Assert
+        Assert.NotNull(result);
         Assert.Equal(2, result.Toc.Length);
         Assert.Equal(1, result.Toc[0].Level);
         Assert.Equal("Heading 1", result.Toc[0].Title);

@@ -45,25 +45,10 @@ public class Generator
 
             var markdown = await File.ReadAllTextAsync(markdownFile);
             
-            // Collect relative images first to process them async
-            var pipeline = new MarkdownPipelineBuilder().UseYamlFrontMatter().Build();
-            var document = Markdown.Parse(markdown, pipeline);
+            var postContent = await _contentProcessor.ProcessPostAsync(markdown, async (url) => 
+                await _imageProcessor.ProcessImageAsync(url, postDir));
             
-            var relativeImages = document.Descendants<LinkInline>()
-                .Where(l => l.IsImage && l.Url != null && !l.Url.StartsWith("http"))
-                .Select(l => l.Url!)
-                .Distinct()
-                .ToList();
-
-            Dictionary<string, string> rewrittenMap = [];
-            foreach (var relPath in relativeImages)
-            {
-                rewrittenMap[relPath] = await _imageProcessor.ProcessImageAsync(relPath, postDir);
-            }
-
-            var postContent = _contentProcessor.ProcessPost(markdown, (url) => rewrittenMap.GetValueOrDefault(url, url));
-            
-            if (postContent.Metadata.Draft) continue;
+            if (postContent == null) continue;
 
             // Rewrite metadata image path
             if (!string.IsNullOrEmpty(postContent.Metadata.CoverImage) && !postContent.Metadata.CoverImage.StartsWith("http"))

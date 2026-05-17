@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using SkiaSharp;
 
@@ -7,6 +8,7 @@ public class ImageProcessor
 {
     private readonly string _outputDir;
     private readonly int _maxImageWidth;
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
 
     public ImageProcessor(string outputDir, int maxImageWidth = 1600)
     {
@@ -19,7 +21,11 @@ public class ImageProcessor
     {
         // Path Traversal Protection
         var fullPath = Path.GetFullPath(Path.Combine(baseDirectory, sourcePath));
-        if (!fullPath.StartsWith(Path.GetFullPath(baseDirectory)))
+        var basePath = Path.GetFullPath(baseDirectory);
+        if (!basePath.EndsWith(Path.DirectorySeparatorChar.ToString()))
+            basePath += Path.DirectorySeparatorChar;
+
+        if (!fullPath.StartsWith(basePath))
         {
             throw new UnauthorizedAccessException($"Attempted to access file outside of directory: {sourcePath}");
         }
@@ -34,45 +40,54 @@ public class ImageProcessor
         var fileName = $"{Path.GetFileNameWithoutExtension(fullPath)}.{hash[..8]}{extension}";
         var outputPath = Path.Combine(_outputDir, fileName);
 
-        if (!File.Exists(outputPath))
+        var fileLock = _locks.GetOrAdd(outputPath, _ => new SemaphoreSlim(1, 1));
+        await fileLock.WaitAsync();
+        try
         {
-            await Task.Run(() =>
+            if (!File.Exists(outputPath))
             {
-                using var input = File.OpenRead(fullPath);
-                using var bitmap = SKBitmap.Decode(input);
-                if (bitmap == null) throw new InvalidOperationException($"Failed to decode image: {fullPath}");
-
-                SKBitmap finalBitmap = bitmap;
-                bool wasResized = false;
-
-                if (bitmap.Width > _maxImageWidth)
+                await Task.Run(() =>
                 {
-                    float ratio = (float)_maxImageWidth / bitmap.Width;
-                    int newHeight = (int)(bitmap.Height * ratio);
-                    
-                    var resizedInfo = new SKImageInfo(_maxImageWidth, newHeight);
-                    // Standard Lanczos-like filter for high quality resizing
-                    var resizedBitmap = bitmap.Resize(resizedInfo, SKSamplingOptions.Default);
-                    
-                    if (resizedBitmap != null)
+                    using var input = File.OpenRead(fullPath);
+                    using var bitmap = SKBitmap.Decode(input);
+                    if (bitmap == null) throw new InvalidOperationException($"Failed to decode image: {fullPath}");
+
+                    SKBitmap finalBitmap = bitmap;
+                    bool wasResized = false;
+
+                    if (bitmap.Width > _maxImageWidth)
                     {
-                        finalBitmap = resizedBitmap;
-                        wasResized = true;
+                        float ratio = (float)_maxImageWidth / bitmap.Width;
+                        int newHeight = (int)(bitmap.Height * ratio);
+                        
+                        var resizedInfo = new SKImageInfo(_maxImageWidth, newHeight);
+                        // Standard Lanczos-like filter for high quality resizing
+                        var resizedBitmap = bitmap.Resize(resizedInfo, SKSamplingOptions.Default);
+                        
+                        if (resizedBitmap != null)
+                        {
+                            finalBitmap = resizedBitmap;
+                            wasResized = true;
+                        }
                     }
-                }
 
-                try
-                {
-                    using var image = SKImage.FromBitmap(finalBitmap);
-                    using var data = image.Encode(SKEncodedImageFormat.Webp, 80);
-                    using var output = File.Create(outputPath);
-                    data.SaveTo(output);
-                }
-                finally
-                {
-                    if (wasResized) finalBitmap.Dispose();
-                }
-            });
+                    try
+                    {
+                        using var image = SKImage.FromBitmap(finalBitmap);
+                        using var data = image.Encode(SKEncodedImageFormat.Webp, 80);
+                        using var output = File.Create(outputPath);
+                        data.SaveTo(output);
+                    }
+                    finally
+                    {
+                        if (wasResized) finalBitmap.Dispose();
+                    }
+                });
+            }
+        }
+        finally
+        {
+            fileLock.Release();
         }
 
         return $"/assets/{fileName}";
