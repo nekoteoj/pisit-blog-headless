@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="pisit-blog-headless.csproj" />
+  <Project Path="pisit-blog-headless.Tests/pisit-blog-headless.Tests.csproj" />
+</Solution>

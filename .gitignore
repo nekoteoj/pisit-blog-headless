@@ -1,0 +1,67 @@
+## [v] Standard .NET Ignore Patterns
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Aa]rm/
+[Aa]rm64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio files
+.vs/
+*.user
+*.userosscache
+*.sln.docstates
+
+# Visual Studio Code files
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# JetBrains Rider files
+.idea/
+*.sln.iml
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# NuGet Packages
+*.nupkg
+# The packages folder can be ignored because of Package Restore
+**/[Pp]ackages/*
+# except build/, which is used as an MSBuild target.
+!**/[Pp]ackages/build/
+# Uncomment if using NuGet Local Packages
+# [Pp]ackages/
+# [Ss]ymbols/
+
+# BOWER Index
+bower_components/
+
+# OTfS (Old Team Foundation Server) files
+*.vssscc
+*.vspscc
+
+## [v] Project Specific Patterns
+# Local configuration overrides
+appsettings.Local.json
+appsettings.Development.json
+
+# Build results (static blog output)
+dist/
+Example/dist/
+.gemini/
