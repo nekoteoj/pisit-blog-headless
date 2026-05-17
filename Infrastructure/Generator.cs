@@ -36,7 +36,7 @@ public class Generator
     public async Task GenerateAsync()
     {
         var postDirectories = Directory.EnumerateDirectories(_config.ContentDirectory);
-        var allPosts = new List<PostContent>();
+        List<PostContent> allPosts = [];
 
         foreach (var postDir in postDirectories)
         {
@@ -55,7 +55,7 @@ public class Generator
                 .Distinct()
                 .ToList();
 
-            var rewrittenMap = new Dictionary<string, string>();
+            Dictionary<string, string> rewrittenMap = [];
             foreach (var relPath in relativeImages)
             {
                 rewrittenMap[relPath] = await _imageProcessor.ProcessImageAsync(relPath, postDir);

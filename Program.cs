@@ -11,8 +11,8 @@ var configuration = new ConfigurationBuilder()
 var blogConfig = configuration.GetSection("Blog").Get<BlogConfiguration>() ?? new BlogConfiguration();
 
 // Override with command line args if provided
-if (args.Length > 0) blogConfig.ContentDirectory = args[0];
-if (args.Length > 1) blogConfig.OutputDirectory = args[1];
+if (args.Length > 0) blogConfig = blogConfig with { ContentDirectory = args[0] };
+if (args.Length > 1) blogConfig = blogConfig with { OutputDirectory = args[1] };
 
 Console.WriteLine($"Starting generation for '{blogConfig.SiteName}'...");
 Console.WriteLine($"Input: {Path.GetFullPath(blogConfig.ContentDirectory)}");
