@@ -1,24 +1,25 @@
-using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using SkiaSharp;
 
 namespace PisitBlog.Application;
 
-public class ImageProcessor
+public class ImageProcessor : IImageProcessor
 {
     private readonly string _outputDir;
     private readonly int _maxImageWidth;
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
+    private readonly SemaphoreSlim[] _locks;
 
     public ImageProcessor(string outputDir, int maxImageWidth = 1600)
     {
         _outputDir = Path.GetFullPath(outputDir);
         _maxImageWidth = maxImageWidth;
-        Directory.CreateDirectory(_outputDir);
+        _locks = Enumerable.Range(0, 32).Select(_ => new SemaphoreSlim(1, 1)).ToArray();
     }
 
     public async Task<string> ProcessImageAsync(string sourcePath, string baseDirectory)
     {
+        Directory.CreateDirectory(_outputDir);
+
         // Path Traversal Protection
         var fullPath = Path.GetFullPath(Path.Combine(baseDirectory, sourcePath));
         var basePath = Path.GetFullPath(baseDirectory);
@@ -40,7 +41,8 @@ public class ImageProcessor
         var fileName = $"{Path.GetFileNameWithoutExtension(fullPath)}.{hash[..8]}{extension}";
         var outputPath = Path.Combine(_outputDir, fileName);
 
-        var fileLock = _locks.GetOrAdd(outputPath, _ => new SemaphoreSlim(1, 1));
+        var lockIndex = Math.Abs(outputPath.GetHashCode()) % _locks.Length;
+        var fileLock = _locks[lockIndex];
         await fileLock.WaitAsync();
         try
         {

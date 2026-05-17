@@ -28,3 +28,8 @@ public record PageResponse<T>(
     int TotalPages,
     T[] Items
 );
+
+public record TagResponse(
+    string Tag,
+    PostMetadata[] Posts
+);

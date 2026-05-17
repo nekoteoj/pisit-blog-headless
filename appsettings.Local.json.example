@@ -1,0 +1,6 @@
+{
+  "Blog": {
+    "BaseUrl": "http://localhost:3000",
+    "OutputDirectory": "./local-test-dist"
+  }
+}

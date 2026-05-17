@@ -4,13 +4,20 @@ using Xunit;
 
 namespace PisitBlog.Tests;
 
-public class ImageProcessorTests : IDisposable
+public class ImageProcessorTests : IAsyncLifetime
 {
-    private readonly string _testOutputDir = "test-output-assets";
+    private readonly string _testOutputDir = $"test-output-assets-{Guid.NewGuid()}";
 
-    public ImageProcessorTests()
+    public Task InitializeAsync()
+    {
+        Directory.CreateDirectory(_testOutputDir);
+        return Task.CompletedTask;
+    }
+
+    public Task DisposeAsync()
     {
         if (Directory.Exists(_testOutputDir)) Directory.Delete(_testOutputDir, true);
+        return Task.CompletedTask;
     }
 
     [Fact]
@@ -124,10 +131,5 @@ public class ImageProcessorTests : IDisposable
         {
             if (File.Exists(sourcePath)) File.Delete(sourcePath);
         }
-    }
-
-    public void Dispose()
-    {
-        if (Directory.Exists(_testOutputDir)) Directory.Delete(_testOutputDir, true);
     }
 }

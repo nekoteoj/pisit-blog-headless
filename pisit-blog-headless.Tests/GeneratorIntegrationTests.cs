@@ -4,16 +4,22 @@ using Xunit;
 
 namespace PisitBlog.Tests;
 
-public class GeneratorIntegrationTests : IDisposable
+public class GeneratorIntegrationTests : IAsyncLifetime
 {
-    private readonly string _testContentDir = "test-content";
-    private readonly string _testDistDir = "test-dist";
+    private readonly string _testContentDir = $"test-content-{Guid.NewGuid()}";
+    private readonly string _testDistDir = $"test-dist-{Guid.NewGuid()}";
 
-    public GeneratorIntegrationTests()
+    public Task InitializeAsync()
+    {
+        Directory.CreateDirectory(_testContentDir);
+        return Task.CompletedTask;
+    }
+
+    public Task DisposeAsync()
     {
         if (Directory.Exists(_testContentDir)) Directory.Delete(_testContentDir, true);
         if (Directory.Exists(_testDistDir)) Directory.Delete(_testDistDir, true);
-        Directory.CreateDirectory(_testContentDir);
+        return Task.CompletedTask;
     }
 
     [Fact]
@@ -39,7 +45,9 @@ summary: summary <with> XML & stuff
             PageSize = 5
         };
 
-        var generator = new Generator(config);
+        var contentProcessor = new PisitBlog.Application.ContentProcessor();
+        var imageProcessor = new PisitBlog.Application.ImageProcessor(Path.Combine(config.OutputDirectory, "assets"), config.MaxImageWidth);
+        var generator = new Generator(config, contentProcessor, imageProcessor);
 
         // Act
         await generator.GenerateAsync();
@@ -70,7 +78,9 @@ summary: summary <with> XML & stuff
         await File.WriteAllTextAsync(Path.Combine(postDir2, "index.md"), "---\ntitle: Draft\nslug: draft\ndate: 2026-05-16\ndraft: true\n---\nContent");
 
         var config = new BlogConfiguration { ContentDirectory = _testContentDir, OutputDirectory = _testDistDir };
-        var generator = new Generator(config);
+        var contentProcessor = new PisitBlog.Application.ContentProcessor();
+        var imageProcessor = new PisitBlog.Application.ImageProcessor(Path.Combine(config.OutputDirectory, "assets"), config.MaxImageWidth);
+        var generator = new Generator(config, contentProcessor, imageProcessor);
 
         // Act
         await generator.GenerateAsync();
@@ -98,7 +108,9 @@ summary: summary <with> XML & stuff
             await File.WriteAllTextAsync(Path.Combine(postDir, "index.md"), $"---\ntitle: Post {i}\nslug: post-{i}\ndate: 2026-05-0{i}\n---\nContent");
         }
 
-        var generator = new Generator(config);
+        var contentProcessor = new PisitBlog.Application.ContentProcessor();
+        var imageProcessor = new PisitBlog.Application.ImageProcessor(Path.Combine(config.OutputDirectory, "assets"), config.MaxImageWidth);
+        var generator = new Generator(config, contentProcessor, imageProcessor);
 
         // Act
         await generator.GenerateAsync();
@@ -117,9 +129,30 @@ summary: summary <with> XML & stuff
         Assert.Contains("\"slug\": \"post-1\"", page2Json);
     }
 
-    public void Dispose()
+    [Fact]
+    public async Task Generate_TagsAreCaseInsensitive()
     {
-        if (Directory.Exists(_testContentDir)) Directory.Delete(_testContentDir, true);
-        if (Directory.Exists(_testDistDir)) Directory.Delete(_testDistDir, true);
+        // Arrange
+        var postDir1 = Path.Combine(_testContentDir, "post1");
+        Directory.CreateDirectory(postDir1);
+        await File.WriteAllTextAsync(Path.Combine(postDir1, "index.md"), "---\ntitle: Post 1\nslug: post1\ndate: 2026-05-16\ntags: [Tech]\n---\nContent");
+
+        var postDir2 = Path.Combine(_testContentDir, "post2");
+        Directory.CreateDirectory(postDir2);
+        await File.WriteAllTextAsync(Path.Combine(postDir2, "index.md"), "---\ntitle: Post 2\nslug: post2\ndate: 2026-05-17\ntags: [tech]\n---\nContent");
+
+        var config = new BlogConfiguration { ContentDirectory = _testContentDir, OutputDirectory = _testDistDir };
+        var contentProcessor = new PisitBlog.Application.ContentProcessor();
+        var imageProcessor = new PisitBlog.Application.ImageProcessor(Path.Combine(config.OutputDirectory, "assets"), config.MaxImageWidth);
+        var generator = new Generator(config, contentProcessor, imageProcessor);
+
+        // Act
+        await generator.GenerateAsync();
+
+        // Assert
+        Assert.True(File.Exists(Path.Combine(_testDistDir, "tags", "tech.json")));
+        var tagJson = await File.ReadAllTextAsync(Path.Combine(_testDistDir, "tags", "tech.json"));
+        Assert.Contains("\"slug\": \"post1\"", tagJson);
+        Assert.Contains("\"slug\": \"post2\"", tagJson);
     }
 }

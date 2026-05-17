@@ -7,7 +7,7 @@ using YamlDotNet.Serialization.NamingConventions;
 
 namespace PisitBlog.Application;
 
-public class ContentProcessor
+public class ContentProcessor : IContentProcessor
 {
     private readonly MarkdownPipeline _pipeline;
     private readonly IDeserializer _yamlDeserializer;
@@ -21,7 +21,6 @@ public class ContentProcessor
 
         _yamlDeserializer = new DeserializerBuilder()
             .WithNamingConvention(CamelCaseNamingConvention.Instance)
-            .IgnoreUnmatchedProperties()
             .Build();
     }
 
@@ -36,9 +35,7 @@ public class ContentProcessor
             throw new InvalidOperationException("Markdown file is missing YAML frontmatter.");
         }
 
-        var yaml = markdownContent.Substring(yamlBlock.Span.Start, yamlBlock.Span.Length)
-            .Trim('-')
-            .Trim();
+        var yaml = string.Join('\n', yamlBlock.Lines.Lines.Select(l => l.ToString()));
 
         var metadata = _yamlDeserializer.Deserialize<PostMetadata>(yaml);
 
@@ -54,7 +51,7 @@ public class ContentProcessor
         {
             foreach (var link in document.Descendants<Markdig.Syntax.Inlines.LinkInline>())
             {
-                if (link.IsImage && link.Url != null && !link.Url.StartsWith("http"))
+                if (link.IsImage && link.Url != null && !UrlHelper.IsExternalUrl(link.Url))
                 {
                     link.Url = await imageRewriter(link.Url);
                 }
@@ -73,7 +70,7 @@ public class ContentProcessor
         var toc = document.Descendants<HeadingBlock>()
             .Select(h => {
                 var id = Markdig.Renderers.Html.HtmlAttributesExtensions.GetAttributes(h).Id ?? "";
-                var title = h.Inline?.FirstChild?.ToString() ?? "";
+                var title = h.Inline != null ? string.Join("", h.Inline.Select(i => i.ToString())) : "";
                 return new TableOfContentsItem(h.Level, title, id);
             })
             .ToArray();

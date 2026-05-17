@@ -1,10 +1,6 @@
 using System.Text.Json;
 using System.Xml;
 using System.Xml.Linq;
-using Markdig;
-using Markdig.Extensions.Yaml;
-using Markdig.Syntax;
-using Markdig.Syntax.Inlines;
 using PisitBlog.Application;
 using PisitBlog.Configuration;
 using PisitBlog.Domain;
@@ -14,27 +10,25 @@ namespace PisitBlog.Infrastructure;
 public class Generator
 {
     private readonly BlogConfiguration _config;
-    private readonly ContentProcessor _contentProcessor;
-    private readonly ImageProcessor _imageProcessor;
+    private readonly IContentProcessor _contentProcessor;
+    private readonly IImageProcessor _imageProcessor;
     private readonly JsonSerializerOptions _jsonOptions;
 
-    public Generator(BlogConfiguration config)
+    public Generator(BlogConfiguration config, IContentProcessor contentProcessor, IImageProcessor imageProcessor)
     {
         _config = config;
-        _contentProcessor = new ContentProcessor();
-        _imageProcessor = new ImageProcessor(
-            Path.Combine(_config.OutputDirectory, "assets"), 
-            _config.MaxImageWidth);
+        _contentProcessor = contentProcessor;
+        _imageProcessor = imageProcessor;
         
         _jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
-        
-        Directory.CreateDirectory(_config.OutputDirectory);
-        Directory.CreateDirectory(Path.Combine(_config.OutputDirectory, "posts", "page"));
-        Directory.CreateDirectory(Path.Combine(_config.OutputDirectory, "tags"));
     }
 
     public async Task GenerateAsync()
     {
+        Directory.CreateDirectory(_config.OutputDirectory);
+        Directory.CreateDirectory(Path.Combine(_config.OutputDirectory, "posts", "page"));
+        Directory.CreateDirectory(Path.Combine(_config.OutputDirectory, "tags"));
+
         var postDirectories = Directory.EnumerateDirectories(_config.ContentDirectory);
         List<PostContent> allPosts = [];
 
@@ -45,13 +39,13 @@ public class Generator
 
             var markdown = await File.ReadAllTextAsync(markdownFile);
             
-            var postContent = await _contentProcessor.ProcessPostAsync(markdown, async (url) => 
-                await _imageProcessor.ProcessImageAsync(url, postDir));
+            var postContent = await _contentProcessor.ProcessPostAsync(markdown, (url) => 
+                _imageProcessor.ProcessImageAsync(url, postDir));
             
             if (postContent == null) continue;
 
             // Rewrite metadata image path
-            if (!string.IsNullOrEmpty(postContent.Metadata.CoverImage) && !postContent.Metadata.CoverImage.StartsWith("http"))
+            if (!string.IsNullOrEmpty(postContent.Metadata.CoverImage) && !UrlHelper.IsExternalUrl(postContent.Metadata.CoverImage))
             {
                 var rewrittenPath = await _imageProcessor.ProcessImageAsync(postContent.Metadata.CoverImage, postDir);
                 postContent = postContent with { Metadata = postContent.Metadata with { CoverImage = rewrittenPath } };
@@ -88,12 +82,13 @@ public class Generator
 
     private async Task GenerateTagsAsync(List<PostContent> sortedPosts)
     {
-        var tags = sortedPosts.SelectMany(p => p.Metadata.Tags).Distinct();
+        var tags = sortedPosts.SelectMany(p => p.Metadata.Tags).Distinct(StringComparer.OrdinalIgnoreCase);
         foreach (var tag in tags)
         {
-            var tagPosts = sortedPosts.Where(p => p.Metadata.Tags.Contains(tag)).Select(p => p.Metadata).ToArray();
-            var tagJson = JsonSerializer.Serialize(tagPosts, _jsonOptions);
-            await File.WriteAllTextAsync(Path.Combine(_config.OutputDirectory, "tags", $"{tag}.json"), tagJson);
+            var tagPosts = sortedPosts.Where(p => p.Metadata.Tags.Contains(tag, StringComparer.OrdinalIgnoreCase)).Select(p => p.Metadata).ToArray();
+            var tagResponse = new TagResponse(tag, tagPosts);
+            var tagJson = JsonSerializer.Serialize(tagResponse, _jsonOptions);
+            await File.WriteAllTextAsync(Path.Combine(_config.OutputDirectory, "tags", $"{tag.ToLowerInvariant()}.json"), tagJson);
         }
     }
 
@@ -106,21 +101,25 @@ public class Generator
     private async Task GenerateRssAsync(List<PostContent> sortedPosts)
     {
         XNamespace content = "http://purl.org/rss/1.0/modules/content/";
+        XNamespace atom = "http://www.w3.org/2005/Atom";
         var rss = new XDocument(
             new XElement("rss", 
                 new XAttribute("version", "2.0"),
                 new XAttribute(XNamespace.Xmlns + "content", content.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "atom", atom.NamespaceName),
                 new XElement("channel",
                     new XElement("title", _config.SiteName),
                     new XElement("link", _config.BaseUrl),
                     new XElement("description", _config.SiteDescription),
+                    new XElement("lastBuildDate", DateTimeOffset.UtcNow.ToString("R")),
+                    new XElement(atom + "link", new XAttribute("href", $"{_config.BaseUrl}/rss.xml"), new XAttribute("rel", "self"), new XAttribute("type", "application/rss+xml")),
                     sortedPosts.Take(20).Select(post => 
                         new XElement("item",
                             new XElement("title", post.Metadata.Title),
                             new XElement("link", $"{_config.BaseUrl}/posts/{post.Metadata.Slug}"),
                             new XElement("description", post.Metadata.Summary),
                             new XElement("pubDate", post.Metadata.Date.ToString("R")),
-                            new XElement("guid", $"{_config.BaseUrl}/posts/{post.Metadata.Slug}")
+                            new XElement("guid", new XAttribute("isPermaLink", "true"), $"{_config.BaseUrl}/posts/{post.Metadata.Slug}")
                         )
                     )
                 )
@@ -140,7 +139,9 @@ public class Generator
                 sortedPosts.Select(post =>
                     new XElement(ns + "url",
                         new XElement(ns + "loc", $"{_config.BaseUrl}/posts/{post.Metadata.Slug}"),
-                        new XElement(ns + "lastmod", post.Metadata.Date.ToString("yyyy-MM-dd"))
+                        new XElement(ns + "lastmod", post.Metadata.Date.ToString("yyyy-MM-dd")),
+                        new XElement(ns + "changefreq", "weekly"),
+                        new XElement(ns + "priority", "0.7")
                     )
                 )
             )
